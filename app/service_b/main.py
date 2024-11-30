@@ -7,7 +7,31 @@ import uuid
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.responses import Response
 
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
 app = FastAPI()
+
+
+# Настройка трассировки
+resource = Resource.create(attributes={"service.name": "service_b"})
+tracer_provider = TracerProvider(resource=resource)
+jaeger_exporter = JaegerExporter(
+    agent_host_name="jaeger",
+    agent_port=6831,
+)
+tracer_provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
+trace.set_tracer_provider(tracer_provider)
+
+# Инструментируем FastAPI
+FastAPIInstrumentor().instrument_app(app)
+
 
 # Метрики
 REQUEST_COUNT = Counter(

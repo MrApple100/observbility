@@ -1,22 +1,43 @@
 from fastapi import FastAPI, HTTPException, Request
 import httpx
 from pydantic import BaseModel
-from prometheus_client import Counter, Histogram, generate_latest
+from prometheus_client import Counter, Histogram, generate_latest, CollectorRegistry, make_asgi_app
 from starlette.responses import Response
 
-
-
-
-
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
 app = FastAPI()
 
+reqistry = CollectorRegistry()
+metrics_app = make_asgi_app(registry=reqistry)
+app.mount("/metrics",metrics_app)
+
+# Настройка трассировки
+resource = Resource.create(attributes={"service.name": "service_a"})
+tracer_provider = TracerProvider(resource=resource)
+jaeger_exporter = JaegerExporter(
+    agent_host_name="jaeger",  # Имя контейнера Jaeger
+    agent_port=6831,
+)
+tracer_provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
+trace.set_tracer_provider(tracer_provider)
+
+# Инструментируем FastAPI и запросы
+FastAPIInstrumentor().instrument_app(app)
+RequestsInstrumentor().instrument()
+
 # Метрики
 REQUEST_COUNT = Counter(
-    "service_a_requests_total", "Количество запросов", ["method", "endpoint", "http_status"]
+    "service_a_requests_total", "Количество запросов", ["method", "endpoint", "http_status"],registry=reqistry
 )
 REQUEST_LATENCY = Histogram(
-    "service_a_request_latency_seconds", "Время обработки запросов", ["endpoint"]
+    "service_a_request_latency_seconds", "Время обработки запросов", ["endpoint"],registry=reqistry
 )
 
 @app.middleware("http")

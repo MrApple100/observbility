@@ -53,6 +53,8 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - shortener_network
 
   grafana:
     image: grafana/grafana
@@ -62,6 +64,38 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
 
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.41
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Веб-интерфейс Jaeger
+      - "6831:6831/udp"  # Порт для агента Jaeger
+      - "6832:6832/udp"
+    networks:
+      - shortener_network
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    networks:
+      - shortener_network
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail-config.yaml:/etc/promtail/config.yml
+    networks:
+      - shortener_network
+
 networks:
   shortener_network:
     name: shortener_network
@@ -69,3 +103,5 @@ networks:
 volumes:
   db_data:
   grafana_data:
+
+    
