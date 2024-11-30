@@ -1,9 +1,37 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import Column, String, select
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
+from prometheus_client import Counter, Histogram, generate_latest
+from starlette.responses import Response
+
+app = FastAPI()
+
+# Метрики
+REQUEST_COUNT = Counter(
+    "service_b_requests_total", "Количество запросов", ["method", "endpoint", "http_status"]
+)
+REQUEST_LATENCY = Histogram(
+    "service_b_request_latency_seconds", "Время обработки запросов", ["endpoint"]
+)
+
+@app.middleware("http")
+async def add_metrics_middleware(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    with REQUEST_LATENCY.labels(endpoint=endpoint).time():
+        response = await call_next(request)
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=response.status_code).inc()
+        return response
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type="text/plain")
+
+
+
 
 # Настройка базы данных
 DATABASE_URL = "postgresql+asyncpg://user:password@db:5432/shortener"
