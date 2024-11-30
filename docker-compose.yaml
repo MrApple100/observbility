@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  service_a:
+    build:
+      context: ./app/service_a
+    container_name: service_a
+    ports:
+      - "8000:8000"
+    depends_on:
+      service_b:
+        condition: service_healthy
+    networks:
+      - shortener_network
+
+  service_b:
+    build:
+      context: ./app/service_b
+    container_name: service_b
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/shortener
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shortener_network
+
+  db:
+    image: postgres:15
+    container_name: db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: shortener
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - shortener_network
+
+networks:
+  shortener_network:
+    name: shortener_network
+
+volumes:
+  db_data:
