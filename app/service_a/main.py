@@ -11,6 +11,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 app = FastAPI()
 
@@ -27,10 +28,12 @@ jaeger_exporter = JaegerExporter(
 )
 tracer_provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
 trace.set_tracer_provider(tracer_provider)
+tracer = trace.get_tracer(__name__)
 
 # Инструментируем FastAPI и запросы
 FastAPIInstrumentor().instrument_app(app)
 RequestsInstrumentor().instrument()
+HTTPXClientInstrumentor().instrument()
 
 # Метрики
 REQUEST_COUNT = Counter(
@@ -49,20 +52,19 @@ async def add_metrics_middleware(request: Request, call_next):
         REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=response.status_code).inc()
         return response
 
-@app.get("/metrics")
-def metrics():
-    return Response(generate_latest(), media_type="text/plain")
+
 
 class ShortenRequest(BaseModel):
     url: str
 
 @app.post("/shorten")
 async def shorten_url(request: ShortenRequest):
-    async with httpx.AsyncClient() as client:
-        response = await client.post("http://service_b:8001/shorten", json={"url": request.url})
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-        return response.json()
+    with tracer.start_as_current_span("service_a_send_request"):
+        async with httpx.AsyncClient() as client:
+            response = await client.post("http://service_b:8001/shorten", json={"url": request.url})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+            return response.json()
 
 @app.get("/resolve/{short_id}")
 async def resolve_url(short_id: str):

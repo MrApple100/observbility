@@ -61,6 +61,8 @@ services:
     container_name: grafana
     ports:
       - "3000:3000"
+    networks:
+      - shortener_network
     volumes:
       - grafana_data:/var/lib/grafana
 
@@ -72,29 +74,30 @@ services:
       - "16686:16686"  # Веб-интерфейс Jaeger
       - "6831:6831/udp"  # Порт для агента Jaeger
       - "6832:6832/udp"
+      - "6833:6833/udp"
     networks:
       - shortener_network
 
-  loki:
-    image: grafana/loki:2.9.0
-    container_name: loki
-    ports:
-      - "3100:3100"
-    networks:
-      - shortener_network
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./loki-config.yaml:/etc/loki/local-config.yaml
+  # loki:
+  #   image: grafana/loki:2.9.0
+  #   container_name: loki
+  #   ports:
+  #     - "3100:3100"
+  #   networks:
+  #     - shortener_network
+  #   command: -config.file=/etc/loki/local-config.yaml
+  #   volumes:
+  #     - ./loki-config.yaml:/etc/loki/local-config.yaml
 
-  promtail:
-    image: grafana/promtail:2.9.0
-    container_name: promtail
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./promtail-config.yaml:/etc/promtail/config.yml
-    networks:
-      - shortener_network
+  # promtail:
+  #   image: grafana/promtail:2.9.0
+  #   container_name: promtail
+  #   volumes:
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./promtail-config.yaml:/etc/promtail/config.yml
+  #   networks:
+  #     - shortener_network
 
 networks:
   shortener_network:
